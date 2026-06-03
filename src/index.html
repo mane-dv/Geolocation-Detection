@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RemoteDeskGeo</title>
+  <link rel="icon" type="image/png" href="app://remotedeskgeo/icon.png" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f3;
+      padding: 10px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.10);
+      border-radius: 14px;
+      padding: 12px 14px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .app-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+    .app-logo {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      flex-shrink: 0;
+      background: transparent;
+    }
+    h1  { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+    .sub { font-size: 11px; color: #777; }
+
+    .status-bar {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 8px;
+      padding: 8px 10px;
+      flex-shrink: 0;
+      background: #fafaf9;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 10px;
+      font-size: 13px;
+    }
+    .status-bar #status-msg { flex: 1; line-height: 1.45; color: #444; }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+      min-height: 0;
+    }
+    .steps-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      flex: 1;
+      min-height: 0;
+    }
+    .steps-row .step {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .steps-row .step-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+    .step-full { flex-shrink: 0; }
+    .step-full .step-body {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .step-full .step-actions {
+      flex: 0 0 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .step-full .step-actions .btn { width: 100%; }
+    .step-full .result-card { flex: 1; min-width: 0; }
+    .step-full .result-card.visible { margin-top: 0; }
+
+    .step {
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .step-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: #f8f9fa;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #2563eb;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .step-title { font-size: 12px; font-weight: 600; color: #222; }
+    .step-desc  { font-size: 10px; color: #888; margin-top: 1px; }
+    .step-body  { padding: 10px; }
+
+    .form-grid { display: grid; gap: 8px; }
+    .coords-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 4px;
+    }
+    .field input {
+      width: 100%;
+      padding: 7px 9px;
+      font-size: 13px;
+      font-family: inherit;
+      border: 1px solid rgba(0,0,0,0.14);
+      border-radius: 8px;
+      background: #fafaf9;
+    }
+    .field input:focus {
+      outline: none;
+      border-color: #2563eb;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+    }
+    .field input::placeholder { color: #bbb; }
+    .field-hint { display: none; }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .badge.idle      { background: #ebebea; color: #555; }
+    .badge.loading   { background: #fff3cd; color: #856404; }
+    .badge.detected  { background: #d4edda; color: #155724; }
+    .badge.in-range  { background: #d4edda; color: #155724; }
+    .badge.out-range { background: #f8d7da; color: #721c24; }
+    .badge.error     { background: #f8d7da; color: #721c24; }
+
+    .panel {
+      display: none;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .panel.visible { display: block; }
+    .panel.visible .data-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .panel.visible .data-row { border-bottom: none; border-right: 1px solid rgba(0,0,0,0.06); }
+    .panel.visible .data-row:nth-child(2n) { border-right: none; }
+    .panel.visible .data-row:nth-last-child(-n+2) { border-top: 1px solid rgba(0,0,0,0.06); }
+
+    .result-card {
+      display: none;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .result-card.visible .data-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+    }
+    .result-card.visible .data-row {
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 8px 10px;
+      border-bottom: none;
+      border-right: 1px solid rgba(0,0,0,0.06);
+    }
+    .result-card.visible .data-row:last-child { border-right: none; }
+    .result-card.visible .label { min-width: 0; font-size: 11px; }
+    .result-card.visible .value { text-align: left; font-size: 12px; }
+    .result-card.visible { display: block; }
+    .result-card.in-range  { border-color: #a3d9a5; }
+    .result-card.out-range { border-color: #f5c2c7; }
+
+    .result-header {
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .result-card.in-range  .result-header { background: #e8f5e9; color: #1b5e20; }
+    .result-card.out-range .result-header { background: #fdecea; color: #b71c1c; }
+
+    .data-grid { border-top: 1px solid rgba(0,0,0,0.06); }
+    .data-row {
+      display: flex;
+      align-items: center;
+      padding: 6px 10px;
+      gap: 6px;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .data-row:last-child { border-bottom: none; }
+    .data-row:nth-child(odd) { background: #fafaf9; }
+    .icon  { font-size: 15px; width: 20px; text-align: center; }
+    .label { font-size: 11px; color: #666; min-width: 72px; }
+    .value { font-size: 12px; font-weight: 500; color: #111; font-family: monospace; flex: 1; text-align: right; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 500;
+      color: #fff;
+      background: #2563eb;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn:hover    { background: #1d4ed8; }
+    .btn:disabled { background: #93c5fd; cursor: not-allowed; }
+    .btn.secondary {
+      color: #1d4ed8;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+    }
+    .btn.secondary:hover:not(:disabled) { background: #dbeafe; }
+    .btn.secondary:disabled {
+      color: #93c5fd;
+      background: #f8fafc;
+      border-color: #e2e8f0;
+    }
+    #map-link {
+      display: none;
+      margin-top: 10px;
+      font-size: 12px;
+      color: #2563eb;
+      text-decoration: none;
+    }
+    #map-link:hover { text-decoration: underline; }
+
+    .step-placeholder {
+      font-size: 11px;
+      color: #999;
+      text-align: center;
+      padding: 6px 0 0;
+    }
+    #map-link { font-size: 11px; margin-top: 6px; }
+    .step-placeholder.hidden { display: none; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="app-header">
+    <img class="app-logo" src="app://remotedeskgeo/icon.png" alt="RemoteDeskGeo" />
+    <div>
+      <h1>RemoteDeskGeo</h1>
+      <p class="sub">GPS work-site verification for remote attendance</p>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <span class="badge idle" id="status-badge">Ready</span>
+    <span id="status-msg">Follow the steps below: detect GPS, set work site, then compare.</span>
+  </div>
+
+  <div class="steps">
+
+    <div class="steps-row">
+
+    <section class="step">
+      <div class="step-head">
+        <span class="step-num">1</span>
+        <div>
+          <div class="step-title">Your current location</div>
+          <div class="step-desc">Detect GPS from this device</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <button class="btn" id="detect-btn" onclick="detectCurrent()">📍 Detect Current GPS</button>
+        <p class="step-placeholder" id="gps-placeholder">No GPS detected yet</p>
+        <div class="panel" id="gps-panel">
+          <div class="data-grid">
+            <div class="data-row"><span class="icon">📡</span><span class="label">Latitude</span><span class="value" id="gps-lat">—</span></div>
+            <div class="data-row"><span class="icon">📡</span><span class="label">Longitude</span><span class="value" id="gps-lng">—</span></div>
+            <div class="data-row"><span class="icon">🎯</span><span class="label">Accuracy</span><span class="value" id="gps-acc">—</span></div>
+            <div class="data-row"><span class="icon">🕐</span><span class="label">Detected at</span><span class="value" id="gps-ts">—</span></div>
+          </div>
+        </div>
+        <a id="map-link" target="_blank">🗺️ Open in Google Maps</a>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-head">
+        <span class="step-num">2</span>
+        <div>
+          <div class="step-title">Work site (target)</div>
+          <div class="step-desc">Office coordinates and allowed radius</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <div class="form-grid">
+          <div class="coords-row">
+            <div class="field">
+              <label for="work-lat">Latitude</label>
+              <input type="number" id="work-lat" step="any" placeholder="18.520430" />
+            </div>
+            <div class="field">
+              <label for="work-lng">Longitude</label>
+              <input type="number" id="work-lng" step="any" placeholder="73.856743" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="work-range">Allowed range (meters)</label>
+            <input type="number" id="work-range" min="1" step="1" value="500" />
+            <p class="field-hint">Default 500 m — must be within this distance of the work point.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    </div>
+
+    <section class="step step-full">
+      <div class="step-head">
+        <span class="step-num">3</span>
+        <div>
+          <div class="step-title">Check attendance</div>
+          <div class="step-desc">Compare detected GPS with work site</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <div class="step-actions">
+          <button class="btn secondary" id="compare-btn" onclick="compareLocation()" disabled>⚖️ Compare</button>
+          <p class="step-placeholder" id="compare-placeholder">Complete steps 1 &amp; 2</p>
+        </div>
+        <div class="result-card" id="result-card">
+          <div class="result-header" id="result-title">—</div>
+          <div class="data-grid">
+            <div class="data-row"><span class="icon">↔️</span><span class="label">Distance to work</span><span class="value" id="out-distance">—</span></div>
+            <div class="data-row"><span class="icon">📏</span><span class="label">Allowed range</span><span class="value" id="out-range">—</span></div>
+            <div class="data-row"><span class="icon">🏢</span><span class="label">Work latitude</span><span class="value" id="out-work-lat">—</span></div>
+            <div class="data-row"><span class="icon">🏢</span><span class="label">Work longitude</span><span class="value" id="out-work-lng">—</span></div>
+            <div class="data-row"><span class="icon">🕐</span><span class="label">Compared at</span><span class="value" id="out-ts">—</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+  let currentPosition = null
+
+  function distanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000
+    const toRad = d => d * Math.PI / 180
+    const dLat = toRad(lat2 - lat1)
+    const dLon = toRad(lon2 - lon1)
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  }
+
+  function parseCoord(raw, name) {
+    const n = parseFloat(String(raw).trim())
+    if (!Number.isFinite(n)) throw new Error(`Invalid ${name}. Enter a valid number.`)
+    return n
+  }
+
+  function validateWorkInputs() {
+    const lat = parseCoord(document.getElementById('work-lat').value, 'work latitude')
+    const lng = parseCoord(document.getElementById('work-lng').value, 'work longitude')
+    const range = parseCoord(document.getElementById('work-range').value, 'range')
+
+    if (lat < -90 || lat > 90) throw new Error('Work latitude must be between -90 and 90.')
+    if (lng < -180 || lng > 180) throw new Error('Work longitude must be between -180 and 180.')
+    if (range <= 0) throw new Error('Range must be greater than 0 meters.')
+
+    return { lat, lng, range }
+  }
+
+  function setBadge(kind, text) {
+    const badge = document.getElementById('status-badge')
+    badge.textContent = text
+    badge.className = 'badge ' + kind
+  }
+
+  function showGpsPosition(current) {
+    document.getElementById('gps-placeholder').classList.add('hidden')
+    document.getElementById('gps-panel').className = 'panel visible'
+    document.getElementById('gps-lat').textContent = current.lat.toFixed(6) + '°'
+    document.getElementById('gps-lng').textContent = current.lng.toFixed(6) + '°'
+    document.getElementById('gps-acc').textContent = '± ' + Math.round(current.accuracy) + ' m'
+    document.getElementById('gps-ts').textContent = current.detectedAt.toLocaleString()
+
+    const mapLink = document.getElementById('map-link')
+    mapLink.href = `https://www.google.com/maps?q=${current.lat.toFixed(6)},${current.lng.toFixed(6)}`
+    mapLink.style.display = 'block'
+  }
+
+  function showComparison(work, distance, inRange) {
+    document.getElementById('compare-placeholder').classList.add('hidden')
+    const card = document.getElementById('result-card')
+    card.className = 'result-card visible ' + (inRange ? 'in-range' : 'out-range')
+
+    document.getElementById('result-title').textContent = inRange
+      ? '✓ You are within the work location range'
+      : '✗ You are outside the work location range'
+
+    document.getElementById('out-distance').textContent = distance.toFixed(1) + ' m'
+    document.getElementById('out-range').textContent = Math.round(work.range) + ' m'
+    document.getElementById('out-work-lat').textContent = work.lat.toFixed(6) + '°'
+    document.getElementById('out-work-lng').textContent = work.lng.toFixed(6) + '°'
+    document.getElementById('out-ts').textContent = new Date().toLocaleString()
+
+    if (inRange) {
+      setBadge('in-range', 'In range')
+      document.getElementById('status-msg').textContent =
+        `You are ${distance.toFixed(1)} m from work (limit: ${Math.round(work.range)} m).`
+    } else {
+      setBadge('out-range', 'Out of range')
+      document.getElementById('status-msg').textContent =
+        `You are ${distance.toFixed(1)} m away — must be within ${Math.round(work.range)} m.`
+    }
+  }
+
+  function geoErrorMessage(code) {
+    switch (code) {
+      case 1: return 'Location permission denied. Allow access in system settings and try again.'
+      case 2: return 'GPS position unavailable. Ensure location services are enabled.'
+      case 3: return 'GPS request timed out. Try again near a window or outdoors.'
+      default: return 'Could not read GPS coordinates.'
+    }
+  }
+
+  function getCurrentPosition() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation is not supported on this device.'))
+        return
+      }
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve(pos),
+        err => reject(new Error(geoErrorMessage(err.code))),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      )
+    })
+  }
+
+  async function detectCurrent() {
+    const btn = document.getElementById('detect-btn')
+    const compareBtn = document.getElementById('compare-btn')
+
+    btn.disabled = true
+    btn.textContent = '🛰️ Detecting…'
+    setBadge('loading', 'Detecting…')
+    document.getElementById('status-msg').textContent = 'Reading your GPS coordinates…'
+    document.getElementById('result-card').className = 'result-card'
+    document.getElementById('compare-placeholder').classList.remove('hidden')
+
+    try {
+      const pos = await getCurrentPosition()
+      const c = pos.coords
+
+      currentPosition = {
+        lat: c.latitude,
+        lng: c.longitude,
+        accuracy: c.accuracy,
+        detectedAt: new Date()
+      }
+
+      showGpsPosition(currentPosition)
+      compareBtn.disabled = false
+      setBadge('detected', 'GPS ready')
+      document.getElementById('status-msg').textContent =
+        'GPS detected. Set work site in step 2, then compare in step 3.'
+    } catch (e) {
+      currentPosition = null
+      compareBtn.disabled = true
+      document.getElementById('gps-panel').className = 'panel'
+      document.getElementById('gps-placeholder').classList.remove('hidden')
+      document.getElementById('map-link').style.display = 'none'
+      setBadge('error', 'GPS failed')
+      document.getElementById('status-msg').textContent = e.message
+    } finally {
+      btn.disabled = false
+      btn.textContent = '📍 Detect Current GPS'
+    }
+  }
+
+  function compareLocation() {
+    if (!currentPosition) {
+      setBadge('error', 'No GPS')
+      document.getElementById('status-msg').textContent =
+        'Detect your current GPS in step 1 before comparing.'
+      return
+    }
+
+    let work
+    try {
+      work = validateWorkInputs()
+    } catch (e) {
+      setBadge('error', 'Invalid input')
+      document.getElementById('status-msg').textContent = e.message
+      document.getElementById('result-card').className = 'result-card'
+      document.getElementById('compare-placeholder').classList.remove('hidden')
+      return
+    }
+
+    const distance = distanceMeters(
+      work.lat, work.lng,
+      currentPosition.lat, currentPosition.lng
+    )
+    const inRange = distance <= work.range
+    showComparison(work, distance, inRange)
+  }
+</script>
+</body>
+</html>
